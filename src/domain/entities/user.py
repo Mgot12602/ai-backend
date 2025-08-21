@@ -1,23 +1,34 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, GetCoreSchemaHandler, GetJsonSchemaHandler
+from pydantic_core import core_schema
 from bson import ObjectId
 
 
 class PyObjectId(ObjectId):
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
+    def __get_pydantic_core_schema__(cls, source_type, handler: GetCoreSchemaHandler):
+        """Pydantic v2 core schema for validating ObjectId from str or ObjectId."""
+        def validate_objid(v):
+            if isinstance(v, ObjectId):
+                return v
+            if ObjectId.is_valid(v):
+                return ObjectId(v)
             raise ValueError("Invalid objectid")
-        return ObjectId(v)
+
+        return core_schema.no_info_after_validator_function(
+            validate_objid,
+            core_schema.union_schema([
+                core_schema.is_instance_schema(ObjectId),
+                core_schema.str_schema(),
+            ]),
+        )
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def __get_pydantic_json_schema__(cls, core_schema_obj, handler: GetJsonSchemaHandler):
+        json_schema = handler(core_schema_obj)
+        json_schema.update(type="string")
+        return json_schema
 
 
 class User(BaseModel):

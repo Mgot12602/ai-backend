@@ -1,5 +1,5 @@
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from src.domain.repositories import JobRepository
 from src.domain.entities import Job, JobCreate, JobUpdate, JobStatus
 from src.domain.services import QueueService, AIService
@@ -66,9 +66,9 @@ class JobUseCases:
         )
         
         if status == JobStatus.PROCESSING:
-            update_data.started_at = datetime.utcnow()
+            update_data.started_at = datetime.now(timezone.utc)
         elif status in [JobStatus.COMPLETED, JobStatus.FAILED]:
-            update_data.completed_at = datetime.utcnow()
+            update_data.completed_at = datetime.now(timezone.utc)
         
         job = await self.job_repository.update(job_id, update_data)
         return self._to_response(job) if job else None

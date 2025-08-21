@@ -1,6 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from .connection_manager import manager
 from src.config.auth import get_optional_user
 import json
@@ -53,5 +53,5 @@ async def notify_job_status_update(user_id: str, job_id: str, status: str, messa
         "job_id": job_id,
         "status": status,
         "message": message,
-        "timestamp": str(datetime.utcnow())
+        "timestamp": str(datetime.now(timezone.utc))
     }, user_id)

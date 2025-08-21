@@ -1,5 +1,5 @@
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.domain.repositories import UserRepository
 from src.domain.entities import User, UserCreate, UserUpdate
@@ -13,8 +13,8 @@ class MongoUserRepository(UserRepository):
 
     async def create(self, user_data: UserCreate) -> User:
         user_dict = user_data.dict()
-        user_dict["created_at"] = datetime.utcnow()
-        user_dict["updated_at"] = datetime.utcnow()
+        user_dict["created_at"] = datetime.now(timezone.utc)
+        user_dict["updated_at"] = datetime.now(timezone.utc)
         user_dict["is_active"] = True
         
         result = await self.collection.insert_one(user_dict)
@@ -42,7 +42,7 @@ class MongoUserRepository(UserRepository):
         from bson import ObjectId
         try:
             update_dict = {k: v for k, v in user_data.dict().items() if v is not None}
-            update_dict["updated_at"] = datetime.utcnow()
+            update_dict["updated_at"] = datetime.now(timezone.utc)
             
             result = await self.collection.update_one(
                 {"_id": ObjectId(user_id)},

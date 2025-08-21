@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from contextlib import asynccontextmanager
 from src.infrastructure.database.mongodb import MongoDB
 from src.presentation.api.user_routes import router as user_router
@@ -47,6 +48,12 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "version": "1.0.0"}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    # Return 204 No Content to avoid 404 logs when browsers request /favicon.ico
+    return Response(status_code=204)
 
 
 if __name__ == "__main__":

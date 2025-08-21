@@ -1,5 +1,5 @@
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.domain.repositories import JobRepository
 from src.domain.entities import Job, JobCreate, JobUpdate, JobStatus
@@ -14,8 +14,8 @@ class MongoJobRepository(JobRepository):
     async def create(self, job_data: JobCreate) -> Job:
         job_dict = job_data.dict()
         job_dict["status"] = JobStatus.PENDING
-        job_dict["created_at"] = datetime.utcnow()
-        job_dict["updated_at"] = datetime.utcnow()
+        job_dict["created_at"] = datetime.now(timezone.utc)
+        job_dict["updated_at"] = datetime.now(timezone.utc)
         
         result = await self.collection.insert_one(job_dict)
         job_dict["_id"] = result.inserted_id
@@ -48,7 +48,7 @@ class MongoJobRepository(JobRepository):
         from bson import ObjectId
         try:
             update_dict = {k: v for k, v in job_data.dict().items() if v is not None}
-            update_dict["updated_at"] = datetime.utcnow()
+            update_dict["updated_at"] = datetime.now(timezone.utc)
             
             result = await self.collection.update_one(
                 {"_id": ObjectId(job_id)},
