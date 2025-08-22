@@ -18,7 +18,7 @@ install:
 
 # Start FastAPI dev server (Swagger at http://localhost:8000/docs)
 dev:
-	venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+	venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 
 # Start Celery worker (requires Redis from docker compose)
 worker:

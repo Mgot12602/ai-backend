@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     
     # Authentication
     clerk_secret_key: str = ""
+    clerk_issuer: Optional[str] = None  # e.g. https://your-app.clerk.accounts.dev
+    clerk_audience: Optional[str] = None  # expected aud claim, optional
     jwt_secret_key: str = "your-secret-key-change-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 30
