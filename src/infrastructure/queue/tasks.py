@@ -7,18 +7,22 @@ from src.infrastructure.storage.s3_storage_service import FakeStorageService
 from src.infrastructure.queue.celery_queue_service import CeleryQueueService
 from src.infrastructure.database.mongodb import MongoDB
 import asyncio
-import os
+import logging
+from src.config.settings import settings
 
 
 @celery_app.task
 def process_job(job_id: str, job_data: dict):
     """Process AI job task"""
     try:
+        logger = logging.getLogger(__name__)
+        logger.info("[tasks.process_job] start job_id=%s keys=%s", job_id, list(job_data.keys()) if isinstance(job_data, dict) else type(job_data).__name__)
         # Run async job processing
         asyncio.run(_process_job_async(job_id, job_data))
+        logger.info("[tasks.process_job] completed job_id=%s", job_id)
         return {"status": "completed", "job_id": job_id}
     except Exception as e:
-        print(f"Error processing job {job_id}: {str(e)}")
+        logging.exception("[tasks.process_job] error job_id=%s error=%s", job_id, e)
         return {"status": "failed", "job_id": job_id, "error": str(e)}
 
 
@@ -26,9 +30,12 @@ async def _process_job_async(job_id: str, job_data: dict):
     """Async job processing logic"""
     # Initialize database connection if not already done
     if MongoDB.database is None:
-        connection_string = os.getenv('MONGODB_URL', 'mongodb://localhost:27017')
-        database_name = os.getenv('DATABASE_NAME', 'ai_backend')
-        await MongoDB.connect_to_mongo(connection_string, database_name)
+        logging.debug(
+            "[tasks._process_job_async] connecting to MongoDB url=%s db=%s",
+            settings.mongodb_url,
+            settings.database_name,
+        )
+        await MongoDB.connect_to_mongo(settings.mongodb_url, settings.database_name)
     
     # Initialize services
     job_repository = MongoJobRepository()
@@ -40,4 +47,5 @@ async def _process_job_async(job_id: str, job_data: dict):
     job_use_cases = JobUseCases(job_repository, queue_service, ai_service)
     
     # Process the job
+    logging.debug("[tasks._process_job_async] calling JobUseCases.process_job job_id=%s", job_id)
     await job_use_cases.process_job(job_id)

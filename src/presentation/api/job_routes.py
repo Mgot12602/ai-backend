@@ -7,8 +7,11 @@ from src.infrastructure.repositories import MongoJobRepository
 from src.infrastructure.external.fake_ai_service import FakeAIService
 from src.infrastructure.queue.celery_queue_service import CeleryQueueService
 from src.config.auth import get_current_user
+import logging
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+logger = logging.getLogger(__name__)
 
 
 def get_job_use_cases() -> JobUseCases:
@@ -29,7 +32,9 @@ def get_job_context(
     use_cases: JobUseCases = Depends(get_job_use_cases),
 ) -> JobContext:
     """Aggregate common dependencies to avoid duplication in handlers."""
-    return JobContext(user_id=current_user["user_id"], use_cases=use_cases)
+    ctx = JobContext(user_id=current_user["user_id"], use_cases=use_cases)
+    logger.debug("[job_routes.get_job_context] user_id=%s", ctx.user_id)
+    return ctx
 
 async def get_owned_job(
     job_id: str,
@@ -51,7 +56,15 @@ async def create_job(
     ctx: JobContext = Depends(get_job_context),
 ):
     """Create and enqueue a new AI job"""
-    return await ctx.use_cases.create_job(ctx.user_id, job_request)
+    logger.debug(
+        "[job_routes.create_job] user_id=%s job_type=%s payload_keys=%s",
+        ctx.user_id,
+        getattr(job_request, "job_type", None),
+        list(getattr(job_request, "input_data", {}).keys()) if getattr(job_request, "input_data", None) else [],
+    )
+    resp = await ctx.use_cases.create_job(ctx.user_id, job_request)
+    logger.debug("[job_routes.create_job] created job_id=%s status=%s", resp.id, resp.status)
+    return resp
 
 
 @router.get("/", response_model=List[JobResponse])
@@ -61,7 +74,10 @@ async def get_user_jobs(
     ctx: JobContext = Depends(get_job_context),
 ):
     """Get current user's jobs"""
-    return await ctx.use_cases.get_user_jobs(ctx.user_id, skip, limit)
+    logger.debug("[job_routes.get_user_jobs] user_id=%s skip=%s limit=%s", ctx.user_id, skip, limit)
+    jobs = await ctx.use_cases.get_user_jobs(ctx.user_id, skip, limit)
+    logger.debug("[job_routes.get_user_jobs] found=%s", len(jobs))
+    return jobs
 
 
 @router.get("/{job_id}", response_model=JobResponse)
@@ -69,13 +85,8 @@ async def get_job(
     job: JobResponse = Depends(get_owned_job),
 ):
     """Get job by ID"""
+    logger.debug("[job_routes.get_job] job_id=%s user_id=%s status=%s", job.id, job.user_id, job.status)
     return job
 
 
-@router.post("/generate", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
-async def generate_ai_content(
-    job_request: JobCreateRequest,
-    ctx: JobContext = Depends(get_job_context),
-):
-    """Generate AI content - alias for create_job"""
-    return await ctx.use_cases.create_job(ctx.user_id, job_request)
+ 

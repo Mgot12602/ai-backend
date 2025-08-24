@@ -4,6 +4,7 @@ from src.domain.repositories import JobRepository
 from src.domain.entities import Job, JobCreate, JobUpdate, JobStatus
 from src.domain.services import QueueService, AIService
 from src.application.dto import JobCreateRequest, JobResponse
+import logging
 
 
 class JobUseCases:
@@ -16,8 +17,15 @@ class JobUseCases:
         self.job_repository = job_repository
         self.queue_service = queue_service
         self.ai_service = ai_service
+        self.logger = logging.getLogger(__name__)
 
     async def create_job(self, user_id: str, job_request: JobCreateRequest) -> JobResponse:
+        self.logger.debug(
+            "[JobUseCases.create_job] user_id=%s job_type=%s payload_keys=%s",
+            user_id,
+            job_request.job_type,
+            list(job_request.input_data.keys()) if job_request.input_data else [],
+        )
         job_data = JobCreate(
             user_id=user_id,
             job_type=job_request.job_type,
@@ -25,9 +33,10 @@ class JobUseCases:
         )
         
         job = await self.job_repository.create(job_data)
+        self.logger.debug("[JobUseCases.create_job] created job id=%s", str(job.id))
         
         # Enqueue job for processing
-        await self.queue_service.enqueue_job(
+        enqueue_ok = await self.queue_service.enqueue_job(
             str(job.id), 
             {
                 "job_id": str(job.id),
@@ -35,18 +44,22 @@ class JobUseCases:
                 "input_data": job.input_data
             }
         )
+        self.logger.debug("[JobUseCases.create_job] enqueue_ok=%s job_id=%s", enqueue_ok, str(job.id))
         
         return self._to_response(job)
 
     async def get_job_by_id(self, job_id: str) -> Optional[JobResponse]:
+        self.logger.debug("[JobUseCases.get_job_by_id] job_id=%s", job_id)
         job = await self.job_repository.get_by_id(job_id)
         return self._to_response(job) if job else None
 
     async def get_user_jobs(self, user_id: str, skip: int = 0, limit: int = 100) -> List[JobResponse]:
+        self.logger.debug("[JobUseCases.get_user_jobs] user_id=%s skip=%s limit=%s", user_id, skip, limit)
         jobs = await self.job_repository.get_by_user_id(user_id, skip, limit)
         return [self._to_response(job) for job in jobs]
 
     async def get_jobs_by_status(self, status: JobStatus, skip: int = 0, limit: int = 100) -> List[JobResponse]:
+        self.logger.debug("[JobUseCases.get_jobs_by_status] status=%s skip=%s limit=%s", status, skip, limit)
         jobs = await self.job_repository.get_by_status(status, skip, limit)
         return [self._to_response(job) for job in jobs]
 
@@ -58,6 +71,14 @@ class JobUseCases:
         artifact_url: Optional[str] = None,
         error_message: Optional[str] = None
     ) -> Optional[JobResponse]:
+        self.logger.debug(
+            "[JobUseCases.update_job_status] job_id=%s status=%s has_output=%s has_artifact=%s has_error=%s",
+            job_id,
+            status,
+            bool(output_data),
+            bool(artifact_url),
+            bool(error_message),
+        )
         update_data = JobUpdate(
             status=status,
             output_data=output_data,
@@ -71,12 +92,16 @@ class JobUseCases:
             update_data.completed_at = datetime.now(timezone.utc)
         
         job = await self.job_repository.update(job_id, update_data)
+        if job:
+            self.logger.debug("[JobUseCases.update_job_status] updated job_id=%s new_status=%s", job_id, job.status)
         return self._to_response(job) if job else None
 
     async def process_job(self, job_id: str) -> bool:
         """Process a job using AI service"""
+        self.logger.debug("[JobUseCases.process_job] start job_id=%s", job_id)
         job = await self.job_repository.get_by_id(job_id)
         if not job:
+            self.logger.warning("[JobUseCases.process_job] job not found job_id=%s", job_id)
             return False
 
         try:
@@ -84,7 +109,13 @@ class JobUseCases:
             await self.update_job_status(job_id, JobStatus.PROCESSING)
             
             # Generate AI content
+            self.logger.debug("[JobUseCases.process_job] calling AI service job_type=%s", job.job_type)
             result = await self.ai_service.generate(job.job_type, job.input_data)
+            self.logger.debug(
+                "[JobUseCases.process_job] AI result received job_id=%s keys=%s",
+                job_id,
+                list(result.keys()) if isinstance(result, dict) else type(result).__name__,
+            )
             
             # Update job with results
             await self.update_job_status(
@@ -98,6 +129,7 @@ class JobUseCases:
             
         except Exception as e:
             # Update job with error
+            self.logger.exception("[JobUseCases.process_job] error job_id=%s error=%s", job_id, e)
             await self.update_job_status(
                 job_id, 
                 JobStatus.FAILED,

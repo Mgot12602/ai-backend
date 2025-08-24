@@ -7,11 +7,19 @@ from src.presentation.api.user_routes import router as user_router
 from src.presentation.api.job_routes import router as job_router
 from src.presentation.websocket.websocket_routes import router as websocket_router
 from src.config.settings import settings
+import logging
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    if settings.debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+        )
+        logging.getLogger("uvicorn").setLevel(logging.INFO)
+        logging.debug("[main.lifespan] Debug logging configured")
     await MongoDB.connect_to_mongo(settings.mongodb_url, settings.database_name)
     yield
     # Shutdown
