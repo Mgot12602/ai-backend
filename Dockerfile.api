@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+# Install API Python deps
+COPY requirements-api.txt ./
+RUN pip install -r requirements-api.txt
+
+# Copy app code
+COPY . .
+
+EXPOSE 8000
+
+# Run API
+CMD ["python", "main.py"]

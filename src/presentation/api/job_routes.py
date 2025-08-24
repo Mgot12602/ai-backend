@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from dataclasses import dataclass
-from src.application.use_cases.job_use_cases import JobUseCases
+from src.application.use_cases.job_use_cases import JobUseCases, EnqueueJobError
 from src.application.dto import JobCreateRequest, JobResponse
 from src.infrastructure.repositories import MongoJobRepository
 from src.infrastructure.external.fake_ai_service import FakeAIService
 from src.infrastructure.queue.celery_queue_service import CeleryQueueService
-from src.config.auth import get_current_user
+from src.config.auth import get_current_user, security
 import logging
 
-router = APIRouter(prefix="/jobs", tags=["jobs"])
+router = APIRouter(prefix="/jobs", tags=["jobs"]) 
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +62,14 @@ async def create_job(
         getattr(job_request, "job_type", None),
         list(getattr(job_request, "input_data", {}).keys()) if getattr(job_request, "input_data", None) else [],
     )
-    resp = await ctx.use_cases.create_job(ctx.user_id, job_request)
-    logger.debug("[job_routes.create_job] created job_id=%s status=%s", resp.id, resp.status)
-    return resp
+    try:
+        resp = await ctx.use_cases.create_job(ctx.user_id, job_request)
+        logger.debug("[job_routes.create_job] created job_id=%s status=%s", resp.id, resp.status)
+        return resp
+    except EnqueueJobError as e:
+        logger.error("[job_routes.create_job] enqueue failed: %s", e)
+        # Return Service Unavailable to signal that background processing is down
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
 
 @router.get("/", response_model=List[JobResponse])

@@ -3,7 +3,7 @@ from src.infrastructure.queue.celery_queue_service import celery_app
 from src.application.use_cases import JobUseCases
 from src.infrastructure.repositories import MongoJobRepository
 from src.infrastructure.external.fake_ai_service import FakeAIService
-from src.infrastructure.storage.s3_storage_service import FakeStorageService
+#from src.infrastructure.storage.s3_storage_service import FakeStorageService
 from src.infrastructure.queue.celery_queue_service import CeleryQueueService
 from src.infrastructure.database.mongodb import MongoDB
 import asyncio
@@ -40,12 +40,16 @@ async def _process_job_async(job_id: str, job_data: dict):
     # Initialize services
     job_repository = MongoJobRepository()
     ai_service = FakeAIService()
-    storage_service = FakeStorageService()
+    #storage_service = FakeStorageService()
     queue_service = CeleryQueueService()
     
     # Initialize use case
     job_use_cases = JobUseCases(job_repository, queue_service, ai_service)
     
+    # Simulate expensive computation delay (testing)
+    logging.debug("[tasks._process_job_async] simulating 5s processing delay job_id=%s", job_id)
+    await asyncio.sleep(5)
+
     # Process the job
     logging.debug("[tasks._process_job_async] calling JobUseCases.process_job job_id=%s", job_id)
     await job_use_cases.process_job(job_id)

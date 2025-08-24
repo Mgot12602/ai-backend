@@ -28,15 +28,22 @@ if __name__ == '__main__':
     # Initialize database connection
     asyncio.run(init_database())
 
-    # Prepare Celery worker argv and start
+    # Prepare Celery worker argv (no explicit -Q; use app config)
     argv = [
-        "celery",
-        "-A", "src.infrastructure.queue.celery_queue_service",
         "worker",
-        "-Q", "ai_jobs",
         "-l", "INFO" if not settings.debug else "DEBUG",
         "--concurrency", os.getenv("CELERY_CONCURRENCY", "1"),
     ]
-    logging.info("[celery_worker] Starting Celery worker with argv=%s", argv)
-    sys.argv = argv
-    celery_app.start()
+    try:
+        configured_queues = [q.name for q in (celery_app.conf.task_queues or [])]
+    except Exception:
+        configured_queues = []
+    logging.info(
+        "[celery_worker] Starting Celery worker argv=%s default_queue=%s queues=%s broker=%s",
+        argv,
+        getattr(celery_app.conf, "task_default_queue", None),
+        configured_queues,
+        getattr(celery_app.conf, "broker_url", None),
+    )
+    # Use Celery's Python API entrypoint (no 'celery' program name in argv)
+    celery_app.worker_main(argv)

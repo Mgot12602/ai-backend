@@ -3,6 +3,7 @@ from typing import Dict, Any
 from src.domain.services import QueueService
 import logging
 from src.config.settings import settings
+from kombu import Queue
 
 
 # Celery configuration
@@ -19,8 +20,11 @@ celery_app.conf.update(
     result_serializer='json',
     timezone='UTC',
     enable_utc=True,
+    # Ensure the default queue and routing use the configured queue name
+    task_default_queue=settings.celery_queue_name,
+    task_queues=[Queue(settings.celery_queue_name)],
     task_routes={
-        'src.infrastructure.queue.tasks.process_job': {'queue': 'ai_jobs'},
+        'src.infrastructure.queue.tasks.process_job': {'queue': settings.celery_queue_name},
     }
 )
 
@@ -29,6 +33,16 @@ class CeleryQueueService(QueueService):
     def __init__(self):
         self.celery = celery_app
         self.logger = logging.getLogger(__name__)
+        try:
+            self.logger.debug(
+                "[CeleryQueueService.__init__] broker=%s default_queue=%s routes=%s",
+                settings.redis_url,
+                celery_app.conf.task_default_queue,
+                celery_app.conf.task_routes,
+            )
+        except Exception as _e:
+            # Avoid failing init due to logging
+            pass
 
     async def enqueue_job(self, job_id: str, job_data: Dict[str, Any]) -> bool:
         """Add job to processing queue"""
@@ -40,7 +54,7 @@ class CeleryQueueService(QueueService):
                 list(job_data.keys()) if isinstance(job_data, dict) else type(job_data).__name__,
             )
             process_job.delay(job_id, job_data)
-            self.logger.debug("[CeleryQueueService.enqueue_job] enqueued job_id=%s", job_id)
+            self.logger.info("[CeleryQueueService.enqueue_job] enqueued job_id=%s", job_id)
             return True
         except Exception as e:
             self.logger.exception("[CeleryQueueService.enqueue_job] failed job_id=%s error=%s", job_id, e)

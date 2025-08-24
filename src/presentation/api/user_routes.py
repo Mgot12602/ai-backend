@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Security, status, Response
 from typing import List
 from fastapi.security import HTTPAuthorizationCredentials
 import logging
@@ -7,7 +7,7 @@ from src.application.dto import UserResponse, UserCreateRequest, UserUpdateReque
 from src.infrastructure.repositories import MongoUserRepository
 from src.config.auth import get_current_user, security
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/users", tags=["users"]) 
 logger = logging.getLogger(__name__)
 
 

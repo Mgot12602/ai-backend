@@ -87,7 +87,7 @@ Authorization: Bearer <clerk_token>
 - `POST /api/v1/jobs/` - Create AI job
 - `GET /api/v1/jobs/` - Get user's jobs
 - `GET /api/v1/jobs/{job_id}` - Get specific job
-- `POST /api/v1/jobs/generate` - Generate AI content (alias)
+ 
 
 ### WebSocket
 - `WS /ws/{user_id}?token=<clerk_token>` - Real-time job updates
@@ -177,3 +177,8 @@ Key environment variables:
 ## License
 
 MIT License
+
+
+## Dev mode
+- Docker api is running on DOCKER_API_PORT while local api is running on API_PORT.
+- To authorize the swagger api requests set DEV_BEARER_TOKEN to the HTTPBearer value in swagger.

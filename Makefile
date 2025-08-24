@@ -22,16 +22,16 @@ dev:
 
 # Start Celery worker (requires Redis from docker compose)
 worker:
-	venv/bin/celery -A celery_worker.celery_app worker --loglevel=INFO
+	venv/bin/celery -A celery_worker.celery_app worker -Q ai_jobs --loglevel=INFO
 
 infra-up:
-	docker compose up -d mongodb redis mongo-express minio
+	docker compose up -d mongodb redis mongo-express minio celery-worker api
 
 infra-down:
 	docker compose down
 
 infra-logs:
-	docker compose logs -f mongodb redis mongo-express minio
+	docker compose logs -f mongodb redis mongo-express minio celery-worker api
 
 test:
 	venv/bin/pytest -q

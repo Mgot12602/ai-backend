@@ -7,6 +7,11 @@ from src.application.dto import JobCreateRequest, JobResponse
 import logging
 
 
+class EnqueueJobError(Exception):
+    """Raised when a job cannot be enqueued to the queue backend."""
+    pass
+
+
 class JobUseCases:
     def __init__(
         self, 
@@ -40,11 +45,22 @@ class JobUseCases:
             str(job.id), 
             {
                 "job_id": str(job.id),
-                "job_type": job.job_type,
+                "job_type": job.job_type.value,
                 "input_data": job.input_data
             }
         )
         self.logger.debug("[JobUseCases.create_job] enqueue_ok=%s job_id=%s", enqueue_ok, str(job.id))
+        if not enqueue_ok:
+            # Mark job as failed and raise a domain error so the API returns a non-201 status
+            self.logger.error("[JobUseCases.create_job] failed to enqueue job id=%s", str(job.id))
+            await self.job_repository.update(
+                str(job.id),
+                JobUpdate(
+                    status=JobStatus.FAILED,
+                    error_message="Failed to enqueue job for processing"
+                ),
+            )
+            raise EnqueueJobError(f"Failed to enqueue job {str(job.id)}")
         
         return self._to_response(job)
 

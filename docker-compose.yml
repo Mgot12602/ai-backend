@@ -1,16 +1,20 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     container_name: ai-backend-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${DOCKER_API_PORT}:${API_PORT}"
     env_file:
       - .env
     environment:
-      MONGODB_URL: ${MONGODB_URL}
+      MONGODB_URL: ${DOCKER_MONGODB_URL}
       DATABASE_NAME: ${DATABASE_NAME}
-      REDIS_URL: ${REDIS_URL}
+      REDIS_URL: ${DOCKER_REDIS_URL}
+      API_HOST: ${API_HOST}
+      API_PORT: ${API_PORT}
     depends_on:
       - mongodb
       - redis
@@ -46,16 +50,18 @@ services:
       - ai-backend-network
 
   celery-worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
     container_name: ai-backend-celery
     restart: unless-stopped
     command: python celery_worker.py
     env_file:
       - .env
     environment:
-      MONGODB_URL: ${MONGODB_URL}
+      MONGODB_URL: ${DOCKER_MONGODB_URL}
       DATABASE_NAME: ${DATABASE_NAME}
-      REDIS_URL: ${REDIS_URL}
+      REDIS_URL: ${DOCKER_REDIS_URL}
     depends_on:
       - mongodb
       - redis

@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Depends, status
+from fastapi import HTTPException, Depends, Security, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt, jwk
 from jose.utils import base64url_decode
@@ -190,7 +190,7 @@ class ClerkAuth:
 clerk_auth = ClerkAuth()
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
     """Get current user from Clerk token"""
     try:
         if not credentials or not credentials.credentials:
@@ -207,6 +207,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             (token[:12] + "...") if token else None,
             len(token) if token else 0,
         )
+        # Dev auth bypass: only when DEBUG and explicitly enabled via env
+        try:
+            if settings.debug and getattr(settings, "dev_auth_bypass", False) and getattr(settings, "dev_bearer_token", None):
+                if token == settings.dev_bearer_token:
+                    fake_user_id = getattr(settings, "dev_fake_user_id", None) or "dev-user"
+                    logger.debug("[get_current_user] DEV AUTH BYPASS active | user_id=%s", fake_user_id)
+                    return {"user_id": fake_user_id, "provider": "dev_bypass"}
+                else:
+                    logger.debug("[get_current_user] Dev bypass enabled but token mismatch")
+        except Exception as e:
+            # Never fail auth due to bypass branch errors; proceed to normal verification
+            logger.debug("[get_current_user] Dev bypass check error: %s", e)
+
         user_data = await clerk_auth.verify_clerk_token(token)
         logger.debug(
             "[get_current_user] Verified user | keys=%s",
