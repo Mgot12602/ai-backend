@@ -45,7 +45,7 @@ git clone https://github.com/Mgot12602/ai-backend.git
 cd ai-backend
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-api.txt -r requirements-worker.txt
 ```
 
 ### 2. Start Services

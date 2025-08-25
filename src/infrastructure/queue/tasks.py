@@ -18,9 +18,13 @@ def process_job(job_id: str, job_data: dict):
         logger = logging.getLogger(__name__)
         logger.info("[tasks.process_job] start job_id=%s keys=%s", job_id, list(job_data.keys()) if isinstance(job_data, dict) else type(job_data).__name__)
         # Run async job processing
-        asyncio.run(_process_job_async(job_id, job_data))
-        logger.info("[tasks.process_job] completed job_id=%s", job_id)
-        return {"status": "completed", "job_id": job_id}
+        processed_ok = asyncio.run(_process_job_async(job_id, job_data))
+        if processed_ok:
+            logger.info("[tasks.process_job] completed job_id=%s", job_id)
+            return {"status": "completed", "job_id": job_id}
+        else:
+            logger.warning("[tasks.process_job] processing failed or job not found job_id=%s", job_id)
+            return {"status": "failed", "job_id": job_id}
     except Exception as e:
         logging.exception("[tasks.process_job] error job_id=%s error=%s", job_id, e)
         return {"status": "failed", "job_id": job_id, "error": str(e)}
@@ -45,11 +49,7 @@ async def _process_job_async(job_id: str, job_data: dict):
     
     # Initialize use case
     job_use_cases = JobUseCases(job_repository, queue_service, ai_service)
-    
-    # Simulate expensive computation delay (testing)
-    logging.debug("[tasks._process_job_async] simulating 5s processing delay job_id=%s", job_id)
-    await asyncio.sleep(5)
 
     # Process the job
     logging.debug("[tasks._process_job_async] calling JobUseCases.process_job job_id=%s", job_id)
-    await job_use_cases.process_job(job_id)
+    return await job_use_cases.process_job(job_id)
