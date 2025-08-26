@@ -10,7 +10,7 @@ from src.domain.repositories import JobRepository
 from src.domain.entities import Job, JobCreate, JobUpdate, JobStatus
 from src.domain.services import QueueService, AIService
 from src.application.dto import JobCreateRequest, JobResponse
-from src.infrastructure.events.job_events import publish_job_status_event
+# Removed manual event publishing - using Celery's built-in events instead
 import logging
 
 
@@ -60,24 +60,15 @@ class JobUseCases:
         job = await self.job_repository.create(job_data)
         self.logger.debug("[JobUseCases.create_job] created job id=%s", str(job.id))
 
-        # Publish event so API process can fan out via WebSocket
-        try:
-            await publish_job_status_event(
-                user_id=user_id,
-                job_id=str(job.id),
-                status=JobStatus.PENDING.value,
-                session_id=session_id,
-            )
-        except Exception:
-            self.logger.debug("[JobUseCases.create_job] publish pending event failed silently job_id=%s", str(job.id))
-        
-        # Enqueue job for processing
+        # Enqueue job for processing - include user_id and session_id for event monitoring
         enqueue_ok = await self.queue_service.enqueue_job(
             str(job.id), 
             {
                 "job_id": str(job.id),
                 "job_type": job.job_type.value,
-                "input_data": job.input_data
+                "input_data": job.input_data,
+                "user_id": user_id,
+                "session_id": session_id
             }
         )
         self.logger.debug("[JobUseCases.create_job] enqueue_ok=%s job_id=%s", enqueue_ok, str(job.id))
@@ -141,17 +132,7 @@ class JobUseCases:
         job = await self.job_repository.update(job_id, update_data)
         if job:
             self.logger.debug("[JobUseCases.update_job_status] updated job_id=%s new_status=%s", job_id, job.status)
-            # Publish event so API process can fan out via WebSocket
-            try:
-                await publish_job_status_event(
-                    user_id=job.user_id,
-                    job_id=str(job.id),
-                    status=job.status.value,
-                    session_id=getattr(job, "session_id", None),
-                    message=error_message,
-                )
-            except Exception:
-                self.logger.debug("[JobUseCases.update_job_status] publish event failed silently job_id=%s", job_id)
+            # Events are now automatically handled by Celery's built-in event system
         return self._to_response(job) if job else None
 
     async def process_job(self, job_id: str) -> bool:

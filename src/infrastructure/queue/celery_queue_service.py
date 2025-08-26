@@ -20,28 +20,28 @@ celery_app.conf.update(
     result_serializer='json',
     timezone='UTC',
     enable_utc=True,
-    # Ensure the default queue and routing use the configured queue name
+    # Queue configuration
     task_default_queue=settings.celery_queue_name,
     task_queues=[Queue(settings.celery_queue_name)],
     task_routes={
         'src.infrastructure.queue.tasks.process_job': {'queue': settings.celery_queue_name},
     },
-    # Ensure worker logs are visible in Docker logs and not hijacking root logger
+    # Enable events for monitoring (required for our event monitor)
+    worker_send_task_events=True,
+    task_send_sent_event=True,
+    # Worker configuration
     worker_hijack_root_logger=False,
     worker_redirect_stdouts=True,
     worker_redirect_stdouts_level='INFO',
-    # Improve robustness on startup when broker might not be immediately available
     broker_connection_retry_on_startup=True,
-    # Default execution limits; can be overridden per-task
+    # Task execution limits
     task_soft_time_limit=settings.celery_soft_time_limit,
     task_time_limit=settings.celery_time_limit,
-    # Prefer fairness and avoid hoarding tasks
+    # Task execution behavior
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     task_reject_on_worker_lost=True,
-    # Track 'STARTED' state in result backend (useful for debugging/visibility)
     task_track_started=True,
-    # Create queues automatically if missing (safety with dynamic names)
     task_create_missing_queues=True,
     # Publishing reliability
     task_publish_retry=True,
@@ -51,7 +51,7 @@ celery_app.conf.update(
         'interval_step': 0.2,
         'interval_max': 1,
     },
-    broker_pool_limit=1,  # lower to avoid stale pooled conns in long-lived async API
+    broker_pool_limit=1,
     broker_heartbeat=30,
     broker_heartbeat_checkrate=2,
 )

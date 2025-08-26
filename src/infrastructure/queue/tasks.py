@@ -8,6 +8,7 @@ from src.infrastructure.external.fake_ai_service import FakeAIService
 from src.infrastructure.queue.celery_queue_service import CeleryQueueService
 from src.infrastructure.database.mongodb import MongoDB
 from src.domain.entities import JobStatus
+from src.infrastructure.events.simple_job_notifier import SimpleJobNotifier
 import asyncio
 import logging
 from src.config.settings import settings
@@ -15,17 +16,47 @@ from src.config.settings import settings
 
 @celery_app.task(soft_time_limit=settings.celery_soft_time_limit, time_limit=settings.celery_time_limit)
 def process_job(job_id: str, job_data: dict):
-    """Process AI job task"""
+    """Process AI job task - job_data now includes user_id and session_id for event monitoring"""
     try:
         logger = logging.getLogger(__name__)
-        logger.info("[tasks.process_job] start job_id=%s keys=%s", job_id, list(job_data.keys()) if isinstance(job_data, dict) else type(job_data).__name__)
+        logger.info("[tasks.process_job] start job_id=%s user_id=%s session_id=%s", 
+                   job_id, job_data.get('user_id'), job_data.get('session_id'))
+        
+        # Notify job started
+        user_id = job_data.get('user_id')
+        session_id = job_data.get('session_id')
+        if user_id:
+            SimpleJobNotifier.notify_job_status_sync(
+                user_id=user_id,
+                job_id=job_id,
+                status='PROCESSING',
+                session_id=session_id
+            )
+        
         # Run async job processing
         processed_ok = asyncio.run(_process_job_async(job_id, job_data))
         if processed_ok:
             logger.info("[tasks.process_job] completed job_id=%s", job_id)
+            # Notify job completed
+            if user_id:
+                SimpleJobNotifier.notify_job_status_sync(
+                    user_id=user_id,
+                    job_id=job_id,
+                    status='COMPLETED',
+                    session_id=session_id
+                )
             return {"status": "completed", "job_id": job_id}
         else:
             logger.warning("[tasks.process_job] processing failed or job not found job_id=%s", job_id)
+            # Notify job failed
+            if user_id:
+                SimpleJobNotifier.notify_job_status_sync(
+                    user_id=user_id,
+                    job_id=job_id,
+                    status='FAILED',
+                    session_id=session_id,
+                    message='Processing failed or job not found'
+                )
             return {"status": "failed", "job_id": job_id}
     except SoftTimeLimitExceeded as e:
         logging.warning("[tasks.process_job] soft time limit exceeded job_id=%s limit=%ss", job_id, settings.celery_soft_time_limit)
@@ -37,6 +68,17 @@ def process_job(job_id: str, job_data: dict):
         return {"status": "failed", "job_id": job_id, "error": "soft_time_limit_exceeded"}
     except Exception as e:
         logging.exception("[tasks.process_job] error job_id=%s error=%s", job_id, e)
+        # Notify job failed on exception
+        user_id = job_data.get('user_id')
+        session_id = job_data.get('session_id')
+        if user_id:
+            SimpleJobNotifier.notify_job_status_sync(
+                user_id=user_id,
+                job_id=job_id,
+                status='FAILED',
+                session_id=session_id,
+                message=str(e)
+            )
         return {"status": "failed", "job_id": job_id, "error": str(e)}
 
 

@@ -6,12 +6,16 @@ from src.infrastructure.database.mongodb import MongoDB
 from src.presentation.api.user_routes import router as user_router
 from src.presentation.api.job_routes import router as job_router
 from src.presentation.websocket.websocket_routes import router as websocket_router
-from src.presentation.websocket.event_subscriber import JobEventSubscriber
+from src.infrastructure.events.redis_notification_subscriber import RedisNotificationSubscriber
 from src.config.settings import settings
 import logging
 from src.config.auth import security
 from fastapi.responses import JSONResponse
 import traceback
+
+
+# Global notification subscriber
+notification_subscriber = RedisNotificationSubscriber()
 
 
 @asynccontextmanager
@@ -25,17 +29,10 @@ async def lifespan(app: FastAPI):
         logging.getLogger("uvicorn").setLevel(logging.INFO)
         logging.debug("[main.lifespan] Debug logging configured")
     await MongoDB.connect_to_mongo(settings.mongodb_url, settings.database_name)
-    # Start job events subscriber to forward Redis pub/sub to WebSockets
-    app.state.job_events_subscriber = JobEventSubscriber()
-    await app.state.job_events_subscriber.start()
+    await notification_subscriber.start()
     yield
     # Shutdown
-    # Stop subscriber first to avoid processing during teardown
-    try:
-        if getattr(app.state, "job_events_subscriber", None):
-            await app.state.job_events_subscriber.stop()
-    except Exception:
-        logging.exception("[main.lifespan] error stopping JobEventSubscriber")
+    await notification_subscriber.stop()
     await MongoDB.close_mongo_connection()
 
 
