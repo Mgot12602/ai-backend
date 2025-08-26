@@ -13,8 +13,6 @@ services:
       MONGODB_URL: ${DOCKER_MONGODB_URL}
       DATABASE_NAME: ${DATABASE_NAME}
       REDIS_URL: ${DOCKER_REDIS_URL}
-      API_HOST: ${API_HOST}
-      API_PORT: ${API_PORT}
     depends_on:
       - mongodb
       - redis
@@ -55,7 +53,9 @@ services:
       dockerfile: Dockerfile.worker
     container_name: ai-backend-celery
     restart: unless-stopped
-    command: python celery_worker.py
+    command: >-
+      celery -A src.infrastructure.queue.celery_queue_service:celery_app
+      worker -l DEBUG -Q ai_jobs -O fair --concurrency 1
     env_file:
       - .env
     environment:

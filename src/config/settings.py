@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     # Redis/Queue
     redis_url: str = Field(..., validation_alias=AliasChoices("REDIS_URL", "redis_url"))
     celery_queue_name: str = Field("ai_jobs", validation_alias=AliasChoices("CELERY_QUEUE_NAME", "celery_queue_name"))
+    # Celery time limits (seconds)
+    celery_soft_time_limit: int = Field(90, validation_alias=AliasChoices("CELERY_SOFT_TIME_LIMIT", "celery_soft_time_limit"))
+    celery_time_limit: int = Field(120, validation_alias=AliasChoices("CELERY_TIME_LIMIT", "celery_time_limit"))
+    # App-level timeouts (seconds)
+    processing_timeout_seconds: int = Field(120, validation_alias=AliasChoices("PROCESSING_TIMEOUT_SECONDS", "processing_timeout_seconds"))
+    pending_timeout_seconds: int = Field(300, validation_alias=AliasChoices("PENDING_TIMEOUT_SECONDS", "pending_timeout_seconds"))
     
     # Storage
     aws_access_key_id: Optional[str] = Field(None, validation_alias=AliasChoices("AWS_ACCESS_KEY_ID", "aws_access_key_id"))

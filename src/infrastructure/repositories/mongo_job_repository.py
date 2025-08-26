@@ -4,6 +4,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.domain.repositories import JobRepository
 from src.domain.entities import Job, JobCreate, JobUpdate, JobStatus
 from src.infrastructure.database.mongodb import MongoDB
+import logging
 
 
 class MongoJobRepository(JobRepository):
@@ -26,8 +27,13 @@ class MongoJobRepository(JobRepository):
         from bson import ObjectId
         try:
             job_doc = await self.collection.find_one({"_id": ObjectId(job_id)})
-            return Job(**job_doc) if job_doc else None
-        except:
+            if job_doc:
+                logging.debug("[MongoJobRepository.get_by_id] found job id=%s", job_id)
+                return Job(**job_doc)
+            logging.warning("[MongoJobRepository.get_by_id] job not found id=%s", job_id)
+            return None
+        except Exception as e:
+            logging.exception("[MongoJobRepository.get_by_id] error fetching job id=%s error=%s", job_id, e)
             return None
 
     async def get_by_user_id(self, user_id: str, skip: int = 0, limit: int = 100) -> List[Job]:
@@ -36,6 +42,20 @@ class MongoJobRepository(JobRepository):
         async for job_doc in cursor:
             jobs.append(Job(**job_doc))
         return jobs
+
+    async def get_active_by_user_session(self, user_id: str, session_id: str) -> Optional[Job]:
+        """Return the most recent active job (pending/processing) for a user and session."""
+        try:
+            cursor = self.collection.find({
+                "user_id": user_id,
+                "session_id": session_id,
+                "status": {"$in": [JobStatus.PENDING, JobStatus.PROCESSING]}
+            }).sort("created_at", -1).limit(1)
+            async for job_doc in cursor:
+                return Job(**job_doc)
+            return None
+        except Exception:
+            return None
 
     async def get_by_status(self, status: JobStatus, skip: int = 0, limit: int = 100) -> List[Job]:
         cursor = self.collection.find({"status": status}).skip(skip).limit(limit).sort("created_at", -1)

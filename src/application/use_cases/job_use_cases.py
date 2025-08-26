@@ -1,9 +1,16 @@
+class ActiveJobExistsError(Exception):
+    """Raised when there's already an active job for the same user session."""
+    def __init__(self, existing_job_id: str):
+        super().__init__(f"Active job already exists: {existing_job_id}")
+        self.existing_job_id = existing_job_id
+
 from typing import Optional, List
 from datetime import datetime, timezone
 from src.domain.repositories import JobRepository
 from src.domain.entities import Job, JobCreate, JobUpdate, JobStatus
 from src.domain.services import QueueService, AIService
 from src.application.dto import JobCreateRequest, JobResponse
+from src.infrastructure.events.job_events import publish_job_status_event
 import logging
 
 
@@ -31,14 +38,38 @@ class JobUseCases:
             job_request.job_type,
             list(job_request.input_data.keys()) if job_request.input_data else [],
         )
+        # Enforce single active job per session if session_id is provided
+        session_id = getattr(job_request, "session_id", None)
+        if session_id:
+            existing = await self.job_repository.get_active_by_user_session(user_id, session_id)
+            if existing:
+                self.logger.debug(
+                    "[JobUseCases.create_job] active job exists user_id=%s session_id=%s job_id=%s",
+                    user_id,
+                    session_id,
+                    str(existing.id),
+                )
+                raise ActiveJobExistsError(str(existing.id))
         job_data = JobCreate(
             user_id=user_id,
+            session_id=session_id,
             job_type=job_request.job_type,
             input_data=job_request.input_data
         )
         
         job = await self.job_repository.create(job_data)
         self.logger.debug("[JobUseCases.create_job] created job id=%s", str(job.id))
+
+        # Publish event so API process can fan out via WebSocket
+        try:
+            await publish_job_status_event(
+                user_id=user_id,
+                job_id=str(job.id),
+                status=JobStatus.PENDING.value,
+                session_id=session_id,
+            )
+        except Exception:
+            self.logger.debug("[JobUseCases.create_job] publish pending event failed silently job_id=%s", str(job.id))
         
         # Enqueue job for processing
         enqueue_ok = await self.queue_service.enqueue_job(
@@ -110,6 +141,17 @@ class JobUseCases:
         job = await self.job_repository.update(job_id, update_data)
         if job:
             self.logger.debug("[JobUseCases.update_job_status] updated job_id=%s new_status=%s", job_id, job.status)
+            # Publish event so API process can fan out via WebSocket
+            try:
+                await publish_job_status_event(
+                    user_id=job.user_id,
+                    job_id=str(job.id),
+                    status=job.status.value,
+                    session_id=getattr(job, "session_id", None),
+                    message=error_message,
+                )
+            except Exception:
+                self.logger.debug("[JobUseCases.update_job_status] publish event failed silently job_id=%s", job_id)
         return self._to_response(job) if job else None
 
     async def process_job(self, job_id: str) -> bool:
@@ -157,6 +199,7 @@ class JobUseCases:
         return JobResponse(
             id=str(job.id),
             user_id=job.user_id,
+            session_id=getattr(job, "session_id", None),
             job_type=job.job_type,
             status=job.status,
             input_data=job.input_data,

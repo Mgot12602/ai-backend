@@ -46,12 +46,13 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, token: Optional
         manager.disconnect(websocket, user_id)
 
 
-async def notify_job_status_update(user_id: str, job_id: str, status: str, message: str = None):
+async def notify_job_status_update(user_id: str, job_id: str, status: str, message: str = None, session_id: str | None = None):
     """Notify user about job status update via WebSocket"""
     await manager.send_personal_message({
         "type": "job_status_update",
         "job_id": job_id,
         "status": status,
+        "session_id": session_id,
         "message": message,
         "timestamp": str(datetime.now(timezone.utc))
     }, user_id)

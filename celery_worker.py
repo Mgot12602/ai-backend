@@ -16,7 +16,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 async def init_database():
     """Initialize database connection for worker"""
-    await MongoDB.connect_to_mongo(settings.mongodb_url, settings.database_name)
+    await MongoDB.ensure_connection(settings.mongodb_url, settings.database_name)
 
 
 if __name__ == '__main__':
@@ -33,6 +33,10 @@ if __name__ == '__main__':
         "worker",
         "-l", "INFO" if not settings.debug else "DEBUG",
         "--concurrency", os.getenv("CELERY_CONCURRENCY", "1"),
+        # Explicitly bind worker to the configured queue
+        "-Q", getattr(celery_app.conf, "task_default_queue", settings.celery_queue_name),
+        # Fair scheduling across queues (when multiple)
+        "-O", "fair",
     ]
     try:
         configured_queues = [q.name for q in (celery_app.conf.task_queues or [])]

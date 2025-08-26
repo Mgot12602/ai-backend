@@ -17,6 +17,11 @@ class JobRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_active_by_user_session(self, user_id: str, session_id: str) -> Optional[Job]:
+        """Return the most recent active (pending/processing) job for a user session if any."""
+        pass
+
+    @abstractmethod
     async def get_by_status(self, status: JobStatus, skip: int = 0, limit: int = 100) -> List[Job]:
         pass
 

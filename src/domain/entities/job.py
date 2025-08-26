@@ -22,6 +22,7 @@ class JobType(str, Enum):
 class Job(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: str = Field(..., description="User ID who created the job")
+    session_id: Optional[str] = Field(None, description="Client session identifier")
     job_type: JobType = Field(..., description="Type of AI job")
     status: JobStatus = Field(default=JobStatus.PENDING)
     input_data: Dict[str, Any] = Field(..., description="Input parameters for the job")
@@ -41,6 +42,7 @@ class Job(BaseModel):
 
 class JobCreate(BaseModel):
     user_id: str
+    session_id: Optional[str] = None
     job_type: JobType
     input_data: Dict[str, Any]
 

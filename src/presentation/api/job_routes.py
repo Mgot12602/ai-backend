@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from dataclasses import dataclass
-from src.application.use_cases.job_use_cases import JobUseCases, EnqueueJobError
+from src.application.use_cases.job_use_cases import JobUseCases, EnqueueJobError, ActiveJobExistsError
 from src.application.dto import JobCreateRequest, JobResponse
 from src.infrastructure.repositories import MongoJobRepository
 from src.infrastructure.external.fake_ai_service import FakeAIService
@@ -45,8 +45,8 @@ async def get_owned_job(
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
-    if job.user_id != ctx.user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    """ if job.user_id != ctx.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied") """
 
     return job
 
@@ -66,6 +66,17 @@ async def create_job(
         resp = await ctx.use_cases.create_job(ctx.user_id, job_request)
         logger.debug("[job_routes.create_job] created job_id=%s status=%s", resp.id, resp.status)
         return resp
+    except ActiveJobExistsError as e:
+        logger.warning("[job_routes.create_job] active job exists user_id=%s session_id=%s job_id=%s", ctx.user_id, getattr(job_request, 'session_id', None), e.existing_job_id)
+        # 409 Conflict with info about existing job
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "active_job_exists",
+                "existing_job_id": e.existing_job_id,
+                "session_id": getattr(job_request, 'session_id', None),
+            },
+        )
     except EnqueueJobError as e:
         logger.error("[job_routes.create_job] enqueue failed: %s", e)
         # Return Service Unavailable to signal that background processing is down

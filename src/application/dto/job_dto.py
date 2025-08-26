@@ -5,6 +5,7 @@ from src.domain.entities import JobType, JobStatus
 
 
 class JobCreateRequest(BaseModel):
+    session_id: str | None = None
     job_type: JobType
     input_data: Dict[str, Any]
 
@@ -12,6 +13,7 @@ class JobCreateRequest(BaseModel):
 class JobResponse(BaseModel):
     id: str
     user_id: str
+    session_id: str | None = None
     job_type: JobType
     status: JobStatus
     input_data: Dict[str, Any]
@@ -27,5 +29,6 @@ class JobResponse(BaseModel):
 class JobStatusUpdate(BaseModel):
     job_id: str
     status: JobStatus
+    session_id: str | None = None
     message: Optional[str] = None
     progress: Optional[int] = None
